@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --config config/nodemon.json src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "build": "prisma generate && prisma db push",
+    "postinstall": "prisma generate"
   },
   "keywords": [
     "discord",
@@ -35,11 +37,11 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "openai": "^5.19.1",
-    "pg": "^8.16.0"
+    "pg": "^8.16.0",
+    "prisma": "^6.13.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.2",
-    "prisma": "^6.13.0"
+    "nodemon": "^3.1.2"
   },
   "engines": {
     "node": ">=18.0.0"
