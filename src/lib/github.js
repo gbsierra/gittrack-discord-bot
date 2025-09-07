@@ -17,6 +17,8 @@ class GitHubService {
    */
   async fetchCommitDetails(repoFullName, commitSha, githubToken = null) {
     try {
+      console.log('🔍 [GITHUB] Fetching commit details:', { repoFullName, commitSha, hasToken: !!githubToken });
+      
       const headers = {
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'GitTrack-Enhanced'
@@ -26,14 +28,21 @@ class GitHubService {
         headers['Authorization'] = `token ${githubToken}`;
       }
 
-      const response = await axios.get(
-        `${this.baseURL}/repos/${repoFullName}/commits/${commitSha}`,
-        { headers }
-      );
+      const url = `${this.baseURL}/repos/${repoFullName}/commits/${commitSha}`;
+      console.log('🔍 [GITHUB] Making request to:', url);
 
+      const response = await axios.get(url, { headers });
+      
+      console.log('✅ [GITHUB] Commit details fetched successfully');
       return response.data;
     } catch (error) {
-      console.error('Error fetching commit details:', error.message);
+      console.error('❌ [GITHUB] Error fetching commit details:', {
+        repoFullName,
+        commitSha,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.message
+      });
       throw error;
     }
   }
@@ -107,6 +116,8 @@ class GitHubService {
    */
   async getRepository(repoFullName, githubToken = null) {
     try {
+      console.log('🔍 [GITHUB] Fetching repository info:', { repoFullName, hasToken: !!githubToken });
+      
       const headers = {
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'GitTrack-Enhanced'
@@ -116,14 +127,20 @@ class GitHubService {
         headers['Authorization'] = `token ${githubToken}`;
       }
 
-      const response = await axios.get(
-        `${this.baseURL}/repos/${repoFullName}`,
-        { headers }
-      );
+      const url = `${this.baseURL}/repos/${repoFullName}`;
+      console.log('🔍 [GITHUB] Making request to:', url);
 
+      const response = await axios.get(url, { headers });
+      
+      console.log('✅ [GITHUB] Repository info fetched successfully');
       return response.data;
     } catch (error) {
-      console.error('Error fetching repository:', error.message);
+      console.error('❌ [GITHUB] Error fetching repository:', {
+        repoFullName,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.message
+      });
       throw error;
     }
   }

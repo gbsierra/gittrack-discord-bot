@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, InteractionResponseFlags } = require('discord.js');
 
 // Supported non-branch events (should mirror routing-capable events)
 const ROUTABLE_EVENTS = [
@@ -89,7 +89,7 @@ module.exports = {
   },
 
   async execute(interaction, prisma) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: [InteractionResponseFlags.Ephemeral] });
 
     const repositoryId = interaction.options.getString('repository');
     const eventType = interaction.options.getString('event');

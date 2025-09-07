@@ -28,6 +28,13 @@ class LLMService {
    */
   async generateUserFriendlyMessage(commits, provider, apiKey, repository) {
     try {
+      console.log('🔍 [LLM] Generating user-friendly message:', {
+        provider,
+        hasApiKey: !!apiKey,
+        commitCount: commits.length,
+        repository: repository?.full_name
+      });
+      
       if (provider === 'openai') {
         return await this.generateWithOpenAI(commits, apiKey, repository);
       } else if (provider === 'openrouter') {
@@ -36,7 +43,7 @@ class LLMService {
         throw new Error(`Unsupported provider: ${provider}`);
       }
     } catch (error) {
-      console.error('LLM generation error:', error);
+      console.error('❌ [LLM] Generation error:', error);
       return this.generateFallbackMessage(commits, repository);
     }
   }

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, InteractionResponseFlags } = require('discord.js');
 const { checkPermissions } = require('../functions/permissionChecker');
 
 module.exports = {
@@ -15,7 +15,7 @@ module.exports = {
     if (!checkPermissions(interaction)) {
       await interaction.reply({
         content: "❌ You need the `Manage Webhooks` permission to use this command.",
-        ephemeral: true
+        flags: [InteractionResponseFlags.Ephemeral]
       });
       return;
     }
@@ -25,7 +25,7 @@ module.exports = {
     if (!isConfirmed) {
       await interaction.reply({
         content: "❌ You must confirm the reset action by setting the 'confirm' option to true.",
-        ephemeral: true
+        flags: [InteractionResponseFlags.Ephemeral]
       });
       return;
     }
@@ -66,7 +66,7 @@ module.exports = {
 
     collector.on('collect', async i => {
       if (i.user.id !== interaction.user.id) {
-        await i.reply({ content: 'Only the command user can confirm this action.', ephemeral: true });
+        await i.reply({ content: 'Only the command user can confirm this action.', flags: [InteractionResponseFlags.Ephemeral] });
         return;
       }
 

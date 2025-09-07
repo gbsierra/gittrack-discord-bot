@@ -15,7 +15,10 @@ async function main() {
   const webServer = initializeWebServer(prisma, botClient);
   const port = process.env.PORT || 3000;
   webServer.listen(port, () => {
-    console.log(`Webhook server listening on port ${port}`);
+    console.log(`🚀 [SERVER] Webhook server listening on port ${port}`);
+    console.log(`🔍 [SERVER] Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔍 [SERVER] GitHub Token configured: ${!!process.env.GITHUB_TOKEN}`);
+    console.log(`🔍 [SERVER] Webhook Secret configured: ${!!process.env.GITHUB_WEBHOOK_SECRET}`);
   });
 
   // Health check endpoint

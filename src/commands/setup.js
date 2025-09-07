@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, InteractionResponseFlags } = require('discord.js');
 const { checkRepositoryLimit } = require('../functions/limitChecker');
 const crypto = require('crypto');
 
@@ -22,7 +22,7 @@ module.exports = {
         .setRequired(false)),
   
   async execute(interaction, prisma) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: [InteractionResponseFlags.Ephemeral] });
 
     const repoUrl = interaction.options.getString('repository');
     const setupChannel = interaction.options.getChannel('channel');

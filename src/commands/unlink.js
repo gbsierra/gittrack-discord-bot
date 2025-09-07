@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, InteractionResponseFlags } = require('discord.js');
 const { describeBranchPattern } = require('../functions/branchMatcher');
 
 module.exports = {
@@ -20,7 +20,7 @@ module.exports = {
         .setDescription('The channel to unlink notifications from (optional)')
         .setRequired(false)),
   async execute(interaction, prisma) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: [InteractionResponseFlags.Ephemeral] });
 
     const repoUrl = interaction.options.getString('url');
     const branchName = interaction.options.getString('branch');

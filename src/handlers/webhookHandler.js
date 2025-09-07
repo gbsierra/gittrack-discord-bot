@@ -15,8 +15,19 @@ function initializeWebServer(prisma, botClient) {
   // Middleware to capture raw body AND parse it appropriately
   // Increase the limit to handle large GitHub webhook payloads (up to 10MB, instead of 100kb)
   app.use('/github-webhook', express.raw({ type: '*/*', limit: '10mb' }), (req, res, next) => {
+    console.log('🔍 [WEBHOOK] Raw body middleware - req.body type:', typeof req.body);
+    console.log('🔍 [WEBHOOK] Raw body middleware - req.body length:', req.body ? req.body.length : 'undefined');
+    console.log('🔍 [WEBHOOK] Raw body middleware - Content-Type:', req.headers['content-type']);
+    console.log('🔍 [WEBHOOK] Raw body middleware - Content-Length:', req.headers['content-length']);
+    
     // Store raw body for signature validation
-    req.rawBody = req.body.toString('utf8');
+    if (req.body) {
+      req.rawBody = req.body.toString('utf8');
+      console.log('✅ [WEBHOOK] Raw body converted to string, length:', req.rawBody.length);
+    } else {
+      console.error('❌ [WEBHOOK] req.body is undefined!');
+      req.rawBody = '';
+    }
     
     // Parse based on content type
     const contentType = req.headers['content-type'];
@@ -49,10 +60,18 @@ function initializeWebServer(prisma, botClient) {
   });
 
   app.post('/github-webhook', async (req, res) => {
+    console.log('🚀 [WEBHOOK] Received webhook request');
+    console.log('🔍 [WEBHOOK] Headers:', {
+      'content-type': req.headers['content-type'],
+      'x-github-event': req.headers['x-github-event'],
+      'x-hub-signature-256': req.headers['x-hub-signature-256'] ? 'present' : 'missing',
+      'user-agent': req.headers['user-agent']
+    });
+    
     // Check content type first
     const contentType = req.headers['content-type'];
     if (contentType && !contentType.includes('application/json')) {
-      console.error(`Wrong content type: ${contentType}. GitHub webhooks must use application/json.`);
+      console.error(`❌ [WEBHOOK] Wrong content type: ${contentType}. GitHub webhooks must use application/json.`);
       
       // Try to extract repository info from form data if possible and notify Discord
       await tryNotifyContentTypeError(req, prisma, botClient);
@@ -69,6 +88,8 @@ function initializeWebServer(prisma, botClient) {
     
     // Get important information from GitHub's payload
     const payload = req.body;
+    console.log('🔍 [WEBHOOK] Payload type:', typeof payload);
+    console.log('🔍 [WEBHOOK] Payload keys:', payload ? Object.keys(payload) : 'undefined');
     
     // Extract API keys from query parameters for LLM enhancement
     const { openai_key, openrouter_key } = req.query;
@@ -76,10 +97,15 @@ function initializeWebServer(prisma, botClient) {
       provider: openai_key ? 'openai' : (openrouter_key ? 'openrouter' : null),
       apiKey: openai_key || openrouter_key || null
     };
+    console.log('🔍 [WEBHOOK] LLM Config:', { provider: llmConfig.provider, hasApiKey: !!llmConfig.apiKey });
     
     // Ensure we have a valid payload with repository information
     if (!payload || !payload.repository || !payload.repository.html_url) {
-      console.error('Webhook received with invalid payload structure');
+      console.error('❌ [WEBHOOK] Invalid payload structure:', {
+        hasPayload: !!payload,
+        hasRepository: !!(payload && payload.repository),
+        hasHtmlUrl: !!(payload && payload.repository && payload.repository.html_url)
+      });
       
       // More detailed error for debugging
       const errorResponse = {
@@ -96,6 +122,13 @@ function initializeWebServer(prisma, botClient) {
     const signature = req.headers['x-hub-signature-256'];
     const event = req.headers['x-github-event'];
     const requestBody = req.rawBody; // Use raw body for signature validation
+    
+    console.log('🔍 [WEBHOOK] Processing event:', {
+      repoUrl,
+      event,
+      hasSignature: !!signature,
+      rawBodyLength: requestBody ? requestBody.length : 0
+    });
 
     try {
       const possibleUrls = [repoUrl];
@@ -110,8 +143,14 @@ function initializeWebServer(prisma, botClient) {
         include: { server: true }
       });
 
+      console.log('🔍 [WEBHOOK] Repository lookup:', {
+        possibleUrls,
+        foundRepositories: candidateRepositories.length,
+        repositoryIds: candidateRepositories.map(r => r.id)
+      });
+
       if (!candidateRepositories || candidateRepositories.length === 0) {
-        console.warn(`Repository not found or no configurations for: ${repoUrl}`);
+        console.warn(`⚠️ [WEBHOOK] Repository not found or no configurations for: ${repoUrl}`);
         // Optional: Notify owner about unknown repo (current logic can be kept or adapted)
         return res.status(404).send('Repository not configured or no matching secret found.');
       }
@@ -168,6 +207,13 @@ function initializeWebServer(prisma, botClient) {
 
       // Pass validatedRepositoryContext to handlers
       const loggingContext = { startTime, event, action: payload.action };
+      
+      console.log('🔍 [WEBHOOK] Event routing:', {
+        event,
+        action: payload.action,
+        repositoryId: validatedRepositoryContext.id,
+        serverId: validatedRepositoryContext.server.id
+      });
       
       switch (event) {
         case 'push':
@@ -228,7 +274,13 @@ function initializeWebServer(prisma, botClient) {
           return res.status(200).send(`Event ${event} received, but not currently handled.`);
       }
     } catch (error) {
-      console.error('Error processing webhook:', error);
+      console.error('❌ [WEBHOOK] Error processing webhook:', {
+        error: error.message,
+        stack: error.stack,
+        event,
+        repoUrl,
+        hasPayload: !!payload
+      });
       
       // Log error to ErrorLog for debugging
       try {
@@ -383,6 +435,13 @@ function initializeWebServer(prisma, botClient) {
   }
 
   async function handlePushEvent(req, res, payload, prisma, botClient, repoContext, llmConfig = null) {
+    console.log('🔍 [PUSH] Processing push event:', {
+      repoUrl: payload.repository.html_url,
+      branchRef: payload.ref,
+      commitCount: payload.commits ? payload.commits.length : 0,
+      hasLLMConfig: !!llmConfig
+    });
+    
     const repoUrl = payload.repository.html_url;
     const branchRef = payload.ref;
     const branchName = branchRef.startsWith('refs/heads/') ? branchRef.substring(11) : null;
@@ -429,6 +488,12 @@ function initializeWebServer(prisma, botClient) {
                 
                 // Check if LLM enhancement is available and we have commits
                 if (llmConfig && llmConfig.provider && llmConfig.apiKey && payload.commits && payload.commits.length > 0 && !payload.forced && !payload.created) {
+                    console.log('🔍 [PUSH] Attempting LLM enhancement:', {
+                        provider: llmConfig.provider,
+                        commitCount: payload.commits.length,
+                        repository: payload.repository.full_name
+                    });
+                    
                     try {
                         // Generate LLM-enhanced message
                         const userFriendlyMessage = await llmService.generateUserFriendlyMessage(
@@ -438,13 +503,16 @@ function initializeWebServer(prisma, botClient) {
                             payload.repository
                         );
                         
+                        console.log('✅ [PUSH] LLM enhancement successful');
+                        
                         // Create enhanced embed
                         embed = llmService.createDiscordEmbed(userFriendlyMessage, payload.repository, payload.compare);
                     } catch (error) {
-                        console.error('LLM enhancement failed, falling back to standard message:', error);
+                        console.error('❌ [PUSH] LLM enhancement failed, falling back to standard message:', error);
                         embed = createStandardPushEmbed(payload, branchName, repoUrl);
                     }
                 } else {
+                    console.log('🔍 [PUSH] Using standard embed (no LLM enhancement)');
                     // Use standard embed
                     embed = createStandardPushEmbed(payload, branchName, repoUrl);
                 }

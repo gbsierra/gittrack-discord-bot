@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Partials, Collection, Routes, REST } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, Collection, Routes, REST, InteractionResponseFlags } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -164,7 +164,7 @@ async function initializeBot(prisma) {
         await command.execute(interaction, prisma);
       } catch (error) {
         console.error(error);
-        await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+        await interaction.reply({ content: 'There was an error while executing this command!', flags: [InteractionResponseFlags.Ephemeral] });
       }
       return;
     }
@@ -175,7 +175,7 @@ async function initializeBot(prisma) {
         await command.execute(interaction, prisma);
       } catch (error) {
         console.error(error);
-        await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+        await interaction.reply({ content: 'There was an error while executing this command!', flags: [InteractionResponseFlags.Ephemeral] });
       }
       return;
     }
@@ -184,7 +184,7 @@ async function initializeBot(prisma) {
     if (!checkPermissions(interaction)) {
       await interaction.reply({ 
         content: "❌ You need the 'Manage Webhooks' permission to use this command.", 
-        ephemeral: true 
+        flags: [InteractionResponseFlags.Ephemeral]
       });
       return;
     }
