@@ -6,6 +6,8 @@ const { handleWorkflowJobEvent, handleCheckRunEvent } = require('./checksHandler
 const { handlePRReviewEvent, handlePRReviewCommentEvent } = require('./pullRequestHandlers');
 const { checkChannelLimit } = require('../functions/limitChecker');
 const { findMatchingBranches } = require('../functions/branchMatcher');
+const llmService = require('../lib/llm');
+const githubService = require('../lib/github');
 
 function initializeWebServer(prisma, botClient) {
   const app = express();
@@ -67,6 +69,13 @@ function initializeWebServer(prisma, botClient) {
     
     // Get important information from GitHub's payload
     const payload = req.body;
+    
+    // Extract API keys from query parameters for LLM enhancement
+    const { openai_key, openrouter_key } = req.query;
+    const llmConfig = {
+      provider: openai_key ? 'openai' : (openrouter_key ? 'openrouter' : null),
+      apiKey: openai_key || openrouter_key || null
+    };
     
     // Ensure we have a valid payload with repository information
     if (!payload || !payload.repository || !payload.repository.html_url) {
@@ -162,7 +171,7 @@ function initializeWebServer(prisma, botClient) {
       
       switch (event) {
         case 'push':
-          return await handleEventWithLogging(handlePushEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext);
+          return await handleEventWithLogging(handlePushEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext, llmConfig);
         case 'pull_request':
           return await handleEventWithLogging(handlePullRequestEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext);
         case 'issues':
@@ -373,7 +382,7 @@ function initializeWebServer(prisma, botClient) {
     return { statusCode: 200, message: `${issueType} comment event processed successfully.`, channelId: null, messageId: null };
   }
 
-  async function handlePushEvent(req, res, payload, prisma, botClient, repoContext) {
+  async function handlePushEvent(req, res, payload, prisma, botClient, repoContext, llmConfig = null) {
     const repoUrl = payload.repository.html_url;
     const branchRef = payload.ref;
     const branchName = branchRef.startsWith('refs/heads/') ? branchRef.substring(11) : null;
@@ -416,57 +425,30 @@ function initializeWebServer(prisma, botClient) {
             
             const channel = await botClient.channels.fetch(channelId);
             if (channel && channel.isTextBased()) {
-                const color = 0x4F46E5;
-                const embed = {
-                    color: color,
-                    author: {
-                        name: payload.sender.login, // Use sender's login for author name
-                        icon_url: payload.sender.avatar_url, // Sender's avatar
-                        url: payload.sender.html_url // Link to sender's GitHub profile
-                    },
-                    timestamp: new Date().toISOString(),
-                    footer: { text: `GitHub Push Event` }
-                };
-                // ... (rest of embed construction logic from original handlePushEvent)
-                if (payload.created && (!payload.commits || payload.commits.length === 0)) {
-                    embed.title = `🌱 New Branch Created: ${branchName}`;
-                    embed.url = `${repoUrl}/tree/${branchName}`;
-                    embed.fields = [
-                        { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: false },
-                        { name: 'Created by', value: payload.pusher.name || 'Unknown', inline: false },
-                    ];
-                } else if (payload.forced) {
-                    embed.title = `⚠️ Force Push to ${branchName}`;
-                    embed.url = payload.compare;
-                    embed.fields = [
-                        { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: true },
-                        { name: 'Branch', value: `\`${branchName}\``, inline: true },
-                        { name: 'Forced by', value: payload.pusher.name || 'Unknown', inline: false },
-                    ];
-                } else if (payload.commits && payload.commits.length > 0) {
-                    embed.title = `🚀 New Push to ${branchName}`;
-                    embed.url = payload.compare;
-                    embed.description = payload.commits.slice(0, 5).map(commit => {
-                        const commitMessage = commit.message.split('\n')[0];
-                        return `[\`${commit.id.substring(0, 7)}\`](${commit.url}) ${commitMessage}`;
-                    }).join('\n');
-                    if (payload.commits.length > 5) {
-                        embed.description += `\n...and ${payload.commits.length - 5} more commit(s).`;
+                let embed;
+                
+                // Check if LLM enhancement is available and we have commits
+                if (llmConfig && llmConfig.provider && llmConfig.apiKey && payload.commits && payload.commits.length > 0 && !payload.forced && !payload.created) {
+                    try {
+                        // Generate LLM-enhanced message
+                        const userFriendlyMessage = await llmService.generateUserFriendlyMessage(
+                            payload.commits,
+                            llmConfig.provider,
+                            llmConfig.apiKey,
+                            payload.repository
+                        );
+                        
+                        // Create enhanced embed
+                        embed = llmService.createDiscordEmbed(userFriendlyMessage, payload.repository, payload.compare);
+                    } catch (error) {
+                        console.error('LLM enhancement failed, falling back to standard message:', error);
+                        embed = createStandardPushEmbed(payload, branchName, repoUrl);
                     }
-                    embed.fields = [
-                        { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: true },
-                        { name: 'Branch', value: `\`${branchName}\``, inline: true },
-                        { name: 'Pusher', value: payload.pusher.name || 'Unknown', inline: false },
-                    ];
                 } else {
-                    embed.title = `⚙️ Push Event on ${branchName}`;
-                    embed.url = payload.compare || repoUrl;
-                    embed.fields = [
-                        { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: true },
-                        { name: 'Branch', value: `\`${branchName}\``, inline: true },
-                        { name: 'Details', value: 'Push event with no commits.', inline: false },
-                    ];
+                    // Use standard embed
+                    embed = createStandardPushEmbed(payload, branchName, repoUrl);
                 }
+                
                 const sentMessage = await channel.send({ embeds: [embed] });
                 
                 // Store message info for logging (track the latest message sent)
@@ -1235,7 +1217,7 @@ async function checkChannelLimitAndWarn(prisma, botClient, repoContext, channelI
 
 
 // Helper function to handle events with error logging
-async function handleEventWithLogging(handler, req, res, payload, prisma, botClient, repoContext, loggingContext) {
+async function handleEventWithLogging(handler, req, res, payload, prisma, botClient, repoContext, loggingContext, llmConfig = null) {
   const { startTime, event, action } = loggingContext;
   let result;
   let channelId = null;
@@ -1254,7 +1236,7 @@ async function handleEventWithLogging(handler, req, res, payload, prisma, botCli
   };
   
   try {
-    result = await handler(req, res, payload, prisma, botClient, repoContext);
+    result = await handler(req, res, payload, prisma, botClient, repoContext, llmConfig);
     
     // Extract channelId and messageId from result if handler returns them
     if (result && typeof result === 'object') {
@@ -1327,6 +1309,63 @@ async function handleEventWithLogging(handler, req, res, payload, prisma, botCli
     
     return responsePromise;
   }
+}
+
+// Helper function to create standard push embed
+function createStandardPushEmbed(payload, branchName, repoUrl) {
+  const color = 0x4F46E5;
+  const embed = {
+    color: color,
+    author: {
+      name: payload.sender.login,
+      icon_url: payload.sender.avatar_url,
+      url: payload.sender.html_url
+    },
+    timestamp: new Date().toISOString(),
+    footer: { text: `GitHub Push Event` }
+  };
+
+  if (payload.created && (!payload.commits || payload.commits.length === 0)) {
+    embed.title = `🌱 New Branch Created: ${branchName}`;
+    embed.url = `${repoUrl}/tree/${branchName}`;
+    embed.fields = [
+      { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: false },
+      { name: 'Created by', value: payload.pusher.name || 'Unknown', inline: false },
+    ];
+  } else if (payload.forced) {
+    embed.title = `⚠️ Force Push to ${branchName}`;
+    embed.url = payload.compare;
+    embed.fields = [
+      { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: true },
+      { name: 'Branch', value: `\`${branchName}\``, inline: true },
+      { name: 'Forced by', value: payload.pusher.name || 'Unknown', inline: false },
+    ];
+  } else if (payload.commits && payload.commits.length > 0) {
+    embed.title = `🚀 New Push to ${branchName}`;
+    embed.url = payload.compare;
+    embed.description = payload.commits.slice(0, 5).map(commit => {
+      const commitMessage = commit.message.split('\n')[0];
+      return `[\`${commit.id.substring(0, 7)}\`](${commit.url}) ${commitMessage}`;
+    }).join('\n');
+    if (payload.commits.length > 5) {
+      embed.description += `\n...and ${payload.commits.length - 5} more commit(s).`;
+    }
+    embed.fields = [
+      { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: true },
+      { name: 'Branch', value: `\`${branchName}\``, inline: true },
+      { name: 'Pusher', value: payload.pusher.name || 'Unknown', inline: false },
+    ];
+  } else {
+    embed.title = `⚙️ Push Event on ${branchName}`;
+    embed.url = payload.compare || repoUrl;
+    embed.fields = [
+      { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: true },
+      { name: 'Branch', value: `\`${branchName}\``, inline: true },
+      { name: 'Details', value: 'Push event with no commits.', inline: false },
+    ];
+  }
+
+  return embed;
 }
 
 module.exports = { initializeWebServer };

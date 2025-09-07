@@ -209,10 +209,15 @@ module.exports = {
             name: '📊 **Repository Usage**',
             value: `${repoLimit.currentCount}/${repoLimit.maxAllowed} repositories`,
             inline: true
+          },
+          {
+            name: '🤖 **LLM Enhancement (Optional)**',
+            value: `**To enable AI-generated user-friendly messages:**\n\nAdd your API key to the webhook URL:\n\`${webhookBaseUrl}?openai_key=YOUR_API_KEY\`\n\n**Supported providers:**\n• OpenAI: \`&openai_key=sk-xxx\`\n• OpenRouter: \`&openrouter_key=xxx\`\n\n*Without API key: Standard technical messages*`,
+            inline: false
           }
         )
         .setFooter({ 
-          text: 'GitTrack • GitHub Integration', 
+          text: 'GitTrack Enhanced • GitHub Integration', 
           iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' 
         })
         .setTimestamp();
