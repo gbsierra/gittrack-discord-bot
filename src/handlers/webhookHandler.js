@@ -586,12 +586,20 @@ function initializeWebServer(prisma, botClient) {
                     });
                     
                     try {
-                        // Generate LLM-enhanced message
+                        // Fetch actual git diff
+                        const diff = await githubService.fetchCommitDiff(
+                            payload.repository.full_name, 
+                            payload.commits[0].id,
+                            process.env.GITHUB_TOKEN
+                        );
+                        
+                        // Generate LLM-enhanced message with diff
                         const userFriendlyMessage = await llmService.generateUserFriendlyMessage(
                             payload.commits,
                             llmConfig.provider,
                             llmConfig.apiKey,
-                            payload.repository
+                            payload.repository,
+                            diff
                         );
                         
                         console.log('✅ [PUSH] LLM enhancement successful');

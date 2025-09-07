@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const promptService = require('./prompts');
 
 /**
  * LLM Integration for generating user-friendly commit messages
@@ -24,9 +25,10 @@ class LLMService {
    * @param {string} provider - 'openai' or 'openrouter'
    * @param {string} apiKey - API key for the provider
    * @param {Object} repository - Repository information
+   * @param {string} diff - Git diff of the commit
    * @returns {Promise<string>} User-friendly message
    */
-  async generateUserFriendlyMessage(commits, provider, apiKey, repository) {
+  async generateUserFriendlyMessage(commits, provider, apiKey, repository, diff) {
     try {
       console.log('🔍 [LLM] Generating user-friendly message:', {
         provider,
@@ -35,13 +37,17 @@ class LLMService {
         repository: repository?.full_name
       });
       
+      let rawResponse;
       if (provider === 'openai') {
-        return await this.generateWithOpenAI(commits, apiKey, repository);
+        rawResponse = await this.generateWithOpenAI(commits, apiKey, repository, diff);
       } else if (provider === 'openrouter') {
-        return await this.generateWithOpenRouter(commits, apiKey, repository);
+        rawResponse = await this.generateWithOpenRouter(commits, apiKey, repository, diff);
       } else {
         throw new Error(`Unsupported provider: ${provider}`);
       }
+
+      // Parse JSON response and format it
+      return this.formatJsonResponse(rawResponse);
     } catch (error) {
       console.error('❌ [LLM] Generation error:', error);
       return this.generateFallbackMessage(commits, repository);
@@ -53,48 +59,13 @@ class LLMService {
    * @param {Array} commits - Array of commit objects
    * @param {string} apiKey - OpenAI API key
    * @param {Object} repository - Repository information
+   * @param {string} diff - Git diff of the commit
    * @returns {Promise<string>} User-friendly message
    */
-  async generateWithOpenAI(commits, apiKey, repository) {
+  async generateWithOpenAI(commits, apiKey, repository, diff) {
     this.initializeOpenAI(apiKey);
 
-    const commitMessages = commits.map(commit => commit.message).join('\n');
-    const commitCount = commits.length;
-    const repoName = repository.name;
-
-    const prompt = `Analyze these GitHub commits and create a clear, concise update message for end users.
-
-Repository: ${repoName}
-Number of commits: ${commitCount}
-
-Commit messages:
-${commitMessages}
-
-Requirements:
-- Be direct and factual about what changed for users
-- Explain what the change means for users (bug fix, new feature, improvement, etc.)
-- Keep it concise (max 300 characters)
-- Use simple, clear language that non-technical users understand
-- Include relevant emoji (1-2 max)
-- NO file names, technical details, or developer jargon
-- NO fluff, opinions, or marketing language
-- NO "try it out" or "let us know" phrases
-- Focus on user-facing changes and impact
-
-Examples of good messages:
-- "🐛 Fixed login issue - users can now sign in without errors"
-- "✨ Added dark mode toggle in settings"
-- "⚡ Improved page loading speed by 40%"
-- "🔧 Updated user dashboard layout"
-- "📱 Fixed mobile app crashes"
-
-Examples of BAD messages (avoid these):
-- "Updated login.js and auth.ts files"
-- "Refactored component structure"
-- "Fixed database connection issues"
-- "Updated dependencies and packages"
-
-Generate a direct, user-focused update message.`;
+    const prompt = promptService.generatePushPrompt(commits, repository, diff);
 
     const response = await this.openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -108,7 +79,7 @@ Generate a direct, user-focused update message.`;
           content: prompt
         }
       ],
-      max_tokens: 300,
+      max_tokens: 2000,
       temperature: 0.7,
     });
 
@@ -120,57 +91,22 @@ Generate a direct, user-focused update message.`;
    * @param {Array} commits - Array of commit objects
    * @param {string} apiKey - OpenRouter API key
    * @param {Object} repository - Repository information
+   * @param {string} diff - Git diff of the commit
    * @returns {Promise<string>} User-friendly message
    */
-  async generateWithOpenRouter(commits, apiKey, repository) {
+  async generateWithOpenRouter(commits, apiKey, repository, diff) {
     console.log('🔍 [LLM] Starting OpenRouter generation:', {
       commitCount: commits.length,
       repoName: repository.name,
       hasApiKey: !!apiKey
     });
     
-    const commitMessages = commits.map(commit => commit.message).join('\n');
-    const commitCount = commits.length;
-    const repoName = repository.name;
-
     console.log('🔍 [LLM] Commit messages to process:', {
-      commitMessages: commitMessages.substring(0, 200) + (commitMessages.length > 200 ? '...' : ''),
-      totalLength: commitMessages.length
+      commitMessages: commits.map(commit => commit.message).join('\n').substring(0, 200) + (commits.map(commit => commit.message).join('\n').length > 200 ? '...' : ''),
+      totalLength: commits.map(commit => commit.message).join('\n').length
     });
 
-    const prompt = `Analyze these GitHub commits and create a clear, concise update message for end users.
-
-Repository: ${repoName}
-Number of commits: ${commitCount}
-
-Commit messages:
-${commitMessages}
-
-Requirements:
-- Be direct and factual about what changed for users
-- Explain what the change means for users (bug fix, new feature, improvement, etc.)
-- Keep it concise (max 300 characters)
-- Use simple, clear language that non-technical users understand
-- Include relevant emoji (1-2 max)
-- NO file names, technical details, or developer jargon
-- NO fluff, opinions, or marketing language
-- NO "try it out" or "let us know" phrases
-- Focus on user-facing changes and impact
-
-Examples of good messages:
-- "🐛 Fixed login issue - users can now sign in without errors"
-- "✨ Added dark mode toggle in settings"
-- "⚡ Improved page loading speed by 40%"
-- "🔧 Updated user dashboard layout"
-- "📱 Fixed mobile app crashes"
-
-Examples of BAD messages (avoid these):
-- "Updated login.js and auth.ts files"
-- "Refactored component structure"
-- "Fixed database connection issues"
-- "Updated dependencies and packages"
-
-Generate a direct, user-focused update message.`;
+    const prompt = promptService.generatePushPrompt(commits, repository, diff);
 
     console.log('🔍 [LLM] Making OpenRouter API request...');
     
@@ -194,7 +130,7 @@ Generate a direct, user-focused update message.`;
             content: prompt
           }
         ],
-        max_tokens: 300,
+        max_tokens: 2000,
         temperature: 0.7,
       })
     });
@@ -215,6 +151,35 @@ Generate a direct, user-focused update message.`;
     console.log('✅ [LLM] OpenRouter API success, response length:', data.choices[0].message.content.length);
     
     return data.choices[0].message.content.trim();
+  }
+
+  /**
+   * Format JSON response from LLM into Discord message format
+   * @param {string} rawResponse - Raw JSON response from LLM
+   * @returns {string} Formatted message with "Update summary:" prefix
+   */
+  formatJsonResponse(rawResponse) {
+    try {
+      // Clean the response - remove any markdown code blocks
+      const cleanedResponse = rawResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      // Parse JSON
+      const parsed = JSON.parse(cleanedResponse);
+      
+      // Format the message
+      let formattedMessage = `Update summary: ${parsed.summary}`;
+      
+      if (parsed.changes && parsed.changes.length > 0) {
+        formattedMessage += '\n\n' + parsed.changes.map(change => `• ${change}`).join('\n');
+      }
+      
+      return formattedMessage;
+    } catch (error) {
+      console.error('❌ [LLM] JSON parsing error:', error);
+      console.log('Raw response:', rawResponse);
+      // Fallback to raw response if JSON parsing fails
+      return rawResponse;
+    }
   }
 
   /**
