@@ -19,6 +19,7 @@ GitTrack is an open-source Discord bot that monitors GitHub repository activity 
 ## ✨ Features
 
 - **Real-time GitHub notifications** - Push events, pull requests, issues, releases, and more
+- **AI-powered summaries** - LLM-generated user-friendly descriptions of Git pushes using OpenAI or OpenRouter
 - **Flexible branch tracking** - Monitor specific branches or all branches per repository
 - **Channel routing** - Route notifications to different Discord channels
 - **Webhook security** - Secure webhook handling with signature verification
@@ -34,6 +35,7 @@ GitTrack is an open-source Discord bot that monitors GitHub repository activity 
 - PostgreSQL database
 - Discord Bot Token & Client ID
 - **For local development**: ngrok (recommended for webhook testing)
+- **For AI summaries**: OpenAI API key or OpenRouter API key (optional)
 
 ### Docker Deployment
 
@@ -95,8 +97,22 @@ GitTrack is an open-source Discord bot that monitors GitHub repository activity 
 
 | Environment | URL Format |
 |-------------|------------|
+| **Railway** | `https://your-app-name.up.railway.app/github-webhook` |
 | **Docker Development** | `https://your-ngrok-url.ngrok.io/github-webhook` |
 | **Production** | `https://yourdomain.com/github-webhook` |
+
+### AI-Powered Summaries
+
+Enable AI-generated summaries by adding your API key to the webhook URL:
+
+```
+https://your-app-name.up.railway.app/github-webhook?openai_key=sk-xxx
+https://your-app-name.up.railway.app/github-webhook?openrouter_key=sk-or-v1-xxx
+```
+
+**Supported providers:**
+- **OpenAI**: Add `?openai_key=sk-xxx` to webhook URL
+- **OpenRouter**: Add `?openrouter_key=sk-or-v1-xxx` to webhook URL
 
 ### Environment Variables
 
@@ -104,12 +120,24 @@ GitTrack is an open-source Discord bot that monitors GitHub repository activity 
 |----------|-------------|----------|---------|
 | `DISCORD_TOKEN` | Discord bot token | Yes | - |
 | `CLIENT_ID` | Discord bot client ID | Yes | - |
-| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
+| `DATABASE_URL` | PostgreSQL connection string (Supabase recommended) | Yes | - |
 | `WEBHOOK_URL` | Public webhook URL for GitHub | Yes | - |
-| `PUBLIC_URL` | Public base URL of your bot | Yes | - |
 | `MAX_REPOS_ALLOWED` | Max repositories per server | No | 10 |
 | `MAX_NOTIFICATION_CHANNELS_ALLOWED` | Max channels per server | No | unlimited |
 
+### Railway Deployment Setup
+
+1. **Create Railway account** at [railway.app](https://railway.app)
+2. **Connect GitHub repository** to Railway
+3. **Set environment variables** in Railway dashboard:
+   ```
+   DISCORD_TOKEN=your_discord_bot_token
+   CLIENT_ID=your_discord_client_id
+   DATABASE_URL=your_supabase_connection_string
+   WEBHOOK_URL=https://your-app-name.up.railway.app/github-webhook
+   ```
+4. **Railway auto-deploys** when you push to GitHub
+5. **Bot stays online 24/7** - no cold start issues
 
 
 
@@ -135,6 +163,8 @@ Bot/
 
 - **Discord Bot** (`src/bot.js`) - Handles Discord interactions and slash commands
 - **Webhook Handler** (`src/handlers/webhookHandler.js`) - Processes GitHub webhook events
+- **LLM Service** (`src/lib/llm.js`) - AI-powered message generation using OpenAI/OpenRouter
+- **GitHub Service** (`src/lib/github.js`) - GitHub API integration
 - **Limit Checker** (`src/functions/limitChecker.js`) - Manages configurable limits
 - **Database Layer** (`prisma/`) - Manages data persistence with Prisma ORM
 
