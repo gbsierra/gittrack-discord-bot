@@ -68,6 +68,14 @@ function initializeWebServer(prisma, botClient) {
       'user-agent': req.headers['user-agent']
     });
     
+    // Log if this is a push event at the very beginning
+    const eventType = req.headers['x-github-event'];
+    if (eventType === 'push') {
+      console.log('🚀 [PUSH] Push webhook received - starting processing');
+    } else {
+      console.log(`🔍 [WEBHOOK] Non-push event received: ${eventType}`);
+    }
+    
     // Check content type first
     const contentType = req.headers['content-type'];
     if (contentType && !contentType.includes('application/json')) {
@@ -106,6 +114,10 @@ function initializeWebServer(prisma, botClient) {
         hasRepository: !!(payload && payload.repository),
         hasHtmlUrl: !!(payload && payload.repository && payload.repository.html_url)
       });
+      
+      if (eventType === 'push') {
+        console.error('❌ [PUSH] Push event failed - invalid payload structure');
+      }
       
       // More detailed error for debugging
       const errorResponse = {
@@ -151,12 +163,18 @@ function initializeWebServer(prisma, botClient) {
 
       if (!candidateRepositories || candidateRepositories.length === 0) {
         console.warn(`⚠️ [WEBHOOK] Repository not found or no configurations for: ${repoUrl}`);
+        if (eventType === 'push') {
+          console.error('❌ [PUSH] Push event failed - repository not configured');
+        }
         // Optional: Notify owner about unknown repo (current logic can be kept or adapted)
         return res.status(404).send('Repository not configured or no matching secret found.');
       }
 
       if (!signature) {
         console.warn(`No signature found in GitHub webhook request for ${repoUrl}`);
+        if (eventType === 'push') {
+          console.error('❌ [PUSH] Push event failed - no signature provided');
+        }
         // Optional: Notify relevant server(s) about missing signature (current logic can be kept or adapted)
         return res.status(401).send('No signature provided');
       }
@@ -185,18 +203,33 @@ function initializeWebServer(prisma, botClient) {
           crypto.timingSafeEqual(Buffer.from(providedSignature, 'hex'), Buffer.from(expectedSignature, 'hex'))
         ) {
           validatedRepositoryContext = repoEntry;
+          console.log(`✅ [WEBHOOK] Repository validated: ${repoEntry.url} (ID: ${repoEntry.id})`);
+          if (eventType === 'push') {
+            console.log('✅ [PUSH] Push event repository validated successfully');
+          }
           break;
+        } else {
+          console.error(`Signature mismatch for repo ID ${repoEntry.id}`);
+          if (eventType === 'push') {
+            console.error('❌ [PUSH] Push event failed - signature mismatch');
+          }
         }
       }
 
       if (!validatedRepositoryContext) {
         console.error(`Invalid signature for ${repoUrl}. No matching secret found.`);
+        if (eventType === 'push') {
+          console.error('❌ [PUSH] Push event failed - no valid repository context found');
+        }
         // Optional: Notify relevant server(s) about invalid signature (current logic can be kept or adapted)
         return res.status(401).send('Invalid signature');
       }
 
       if (!event) {
         console.error('No event type specified in GitHub webhook');
+        if (eventType === 'push') {
+          console.error('❌ [PUSH] Push event failed - no event type specified');
+        }
         return res.status(400).send('No event type specified');
       }
 
@@ -214,6 +247,11 @@ function initializeWebServer(prisma, botClient) {
         repositoryId: validatedRepositoryContext.id,
         serverId: validatedRepositoryContext.server.id
       });
+      
+      // Log if this is a push event specifically
+      if (event === 'push') {
+        console.log('🚀 [PUSH] Push event detected - routing to push handler');
+      }
       
       switch (event) {
         case 'push':
@@ -253,7 +291,13 @@ function initializeWebServer(prisma, botClient) {
         case 'ping':
           return await handleEventWithLogging(handlePingEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext);
         default:
-          console.log(`Event type ${event} is not currently handled.`);
+          console.log(`⚠️ [WEBHOOK] Event type ${event} is not currently handled.`);
+          console.log('🔍 [WEBHOOK] Available event handlers:', [
+            'push', 'pull_request', 'issues', 'star', 'release', 'delete', 'create', 
+            'fork', 'issue_comment', 'pull_request_review', 'pull_request_review_comment',
+            'milestone', 'workflow_run', 'workflow_job', 'check_run', 'deployment', 
+            'deployment_status', 'ping'
+          ]);
           // Log unhandled event to SystemLog for monitoring
           try {
             await prisma.systemLog.create({
@@ -464,8 +508,27 @@ function initializeWebServer(prisma, botClient) {
         }
     });
 
+    console.log('🔍 [PUSH] Found tracked branches:', {
+      repositoryId: repoContext.id,
+      branchName: branchName,
+      trackedBranchesCount: allTrackedBranches.length,
+      trackedBranches: allTrackedBranches.map(tb => ({
+        branchName: tb.branchName,
+        channelId: tb.channelId
+      }))
+    });
+
     // Find branches that match the current branch using pattern matching
     const trackedBranchConfigs = findMatchingBranches(allTrackedBranches, branchName);
+
+    console.log('🔍 [PUSH] Branch matching result:', {
+      branchName: branchName,
+      matchingConfigsCount: trackedBranchConfigs.length,
+      matchingConfigs: trackedBranchConfigs.map(tb => ({
+        branchName: tb.branchName,
+        channelId: tb.channelId
+      }))
+    });
 
     if (trackedBranchConfigs.length === 0) {
               // No tracking configurations match this branch
@@ -475,18 +538,42 @@ function initializeWebServer(prisma, botClient) {
     for (const tbConfig of trackedBranchConfigs) {
         // Use the repository-specific notification channel, fall back to branch-specific channel if set
         const channelId = tbConfig.channelId || repoContext.notificationChannelId || 'pending';
-        if (channelId === 'pending') continue;
+        
+        console.log('🔍 [PUSH] Channel resolution:', {
+          tbConfigChannelId: tbConfig.channelId,
+          repoNotificationChannelId: repoContext.notificationChannelId,
+          resolvedChannelId: channelId,
+          isPending: channelId === 'pending'
+        });
+        
+        if (channelId === 'pending') {
+          console.log('⚠️ [PUSH] Skipping branch config - channel is pending');
+          continue;
+        }
 
         try {
             // Check channel limits before sending notification
             const canSendNotification = await checkChannelLimitAndWarn(prisma, botClient, repoContext, channelId);
             
+            console.log('🔍 [PUSH] Channel limit check:', {
+              channelId: channelId,
+              canSendNotification: canSendNotification
+            });
+            
             if (!canSendNotification) {
-                console.warn(`Skipping branch notification delivery to channel ${channelId} due to exceeding channel limit`);
+                console.warn(`⚠️ [PUSH] Skipping branch notification delivery to channel ${channelId} due to exceeding channel limit`);
                 continue; // Skip this channel, try others
             }
             
+            console.log('🔍 [PUSH] Fetching Discord channel:', { channelId: channelId });
             const channel = await botClient.channels.fetch(channelId);
+            
+            console.log('🔍 [PUSH] Discord channel info:', {
+              channelId: channelId,
+              channelExists: !!channel,
+              isTextBased: channel ? channel.isTextBased() : false
+            });
+            
             if (channel && channel.isTextBased()) {
                 let embed;
                 
@@ -521,7 +608,19 @@ function initializeWebServer(prisma, botClient) {
                     embed = createStandardPushEmbed(payload, branchName, repoUrl);
                 }
                 
+                console.log('🔍 [PUSH] Sending message to Discord:', {
+                  channelId: channelId,
+                  embedTitle: embed.title,
+                  embedDescription: embed.description ? embed.description.substring(0, 100) + '...' : 'No description'
+                });
+                
                 const sentMessage = await channel.send({ embeds: [embed] });
+                
+                console.log('✅ [PUSH] Message sent successfully:', {
+                  channelId: channelId,
+                  messageId: sentMessage.id,
+                  messageUrl: sentMessage.url
+                });
                 
                 // Store message info for logging (track the latest message sent)
                 lastMessageInfo = {
@@ -539,11 +638,23 @@ function initializeWebServer(prisma, botClient) {
                 } catch (dbError) {
                   console.error(`Failed to increment messagesSent for server ${serverConfig.id} after push event:`, dbError);
                 }
+            } else {
+                console.warn('⚠️ [PUSH] Channel not found or not text-based:', {
+                  channelId: channelId,
+                  channelExists: !!channel,
+                  isTextBased: channel ? channel.isTextBased() : false
+                });
             }
         } catch (err) {
-            console.error(`Error sending push message to channel ${channelId}:`, err);
+            console.error(`❌ [PUSH] Error sending push message to channel ${channelId}:`, err);
         }
     }
+    
+    console.log('🔍 [PUSH] Push event processing complete:', {
+      repoUrl: repoUrl,
+      branchName: branchName,
+      lastMessageInfo: lastMessageInfo
+    });
     // Return response with the last message info sent
     return { statusCode: 200, message: 'Push event processed for authenticated server.', ...lastMessageInfo };
   }

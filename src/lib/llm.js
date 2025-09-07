@@ -108,9 +108,20 @@ Generate a Discord message that regular users will understand and appreciate.`;
    * @returns {Promise<string>} User-friendly message
    */
   async generateWithOpenRouter(commits, apiKey, repository) {
+    console.log('🔍 [LLM] Starting OpenRouter generation:', {
+      commitCount: commits.length,
+      repoName: repository.name,
+      hasApiKey: !!apiKey
+    });
+    
     const commitMessages = commits.map(commit => commit.message).join('\n');
     const commitCount = commits.length;
     const repoName = repository.name;
+
+    console.log('🔍 [LLM] Commit messages to process:', {
+      commitMessages: commitMessages.substring(0, 200) + (commitMessages.length > 200 ? '...' : ''),
+      totalLength: commitMessages.length
+    });
 
     const prompt = `Analyze these GitHub commits and create a user-friendly announcement for Discord users.
 
@@ -131,6 +142,8 @@ Requirements:
 
 Generate a Discord message that regular users will understand and appreciate.`;
 
+    console.log('🔍 [LLM] Making OpenRouter API request...');
+    
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -156,11 +169,21 @@ Generate a Discord message that regular users will understand and appreciate.`;
       })
     });
 
+    console.log('🔍 [LLM] OpenRouter API response status:', response.status);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ [LLM] OpenRouter API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: errorText
+      });
       throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('✅ [LLM] OpenRouter API success, response length:', data.choices[0].message.content.length);
+    
     return data.choices[0].message.content.trim();
   }
 
