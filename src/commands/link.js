@@ -1,5 +1,5 @@
 const djs = require('discord.js'); // Import the whole module
-const { SlashCommandBuilder, InteractionResponseFlags } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { checkRepositoryLimit, checkChannelLimit } = require('../functions/limitChecker');
 
 // Helper function to extract owner and repo from GitHub URL
@@ -78,7 +78,7 @@ module.exports = {
         .setRequired(true)),
         
   async execute(interaction, prisma) {
-    await interaction.deferReply({ flags: [InteractionResponseFlags.Ephemeral] });
+    await interaction.deferReply({ ephemeral: true });
 
     const repoUrl = interaction.options.getString('url');
     const branchName = interaction.options.getString('branch');

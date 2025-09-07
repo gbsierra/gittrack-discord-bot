@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, InteractionResponseFlags } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -57,7 +57,7 @@ module.exports = {
   },
         
   async execute(interaction, prisma) {
-    await interaction.deferReply({ flags: [InteractionResponseFlags.Ephemeral] });
+    await interaction.deferReply({ ephemeral: true });
 
     const repositoryId = interaction.options.getString('repository');
     const channel = interaction.options.getChannel('channel');

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, InteractionResponseFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { describeBranchPattern } = require('../functions/branchMatcher');
 const { checkRepositoryLimit, checkChannelLimit, getMaxReposAllowed, getMaxChannelsAllowed } = require('../functions/limitChecker');
 
@@ -7,7 +7,7 @@ module.exports = {
     .setName('status')
     .setDescription('Shows repo status, configurations, and server limits.'), // Shortened description
   async execute(interaction, prisma) {
-    await interaction.deferReply({ flags: [InteractionResponseFlags.Ephemeral] }); // Changed to ephemeral for privacy
+    await interaction.deferReply({ ephemeral: true }); // Changed to ephemeral for privacy
 
     const guildId = interaction.guildId;
 

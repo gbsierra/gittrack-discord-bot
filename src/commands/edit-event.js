@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, InteractionResponseFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 // Supported routable non-branch events and their common actions
 const ROUTABLE_EVENTS = [
@@ -81,7 +81,7 @@ module.exports = {
   },
 
   async execute(interaction, prisma) {
-    await interaction.deferReply({ flags: [InteractionResponseFlags.Ephemeral] });
+    await interaction.deferReply({ ephemeral: true });
 
     const repositoryId = interaction.options.getString('repository');
     const eventType = interaction.options.getString('event');
@@ -159,7 +159,7 @@ module.exports = {
 
       collector.on('collect', async (i) => {
         if (i.user.id !== interaction.user.id) {
-          await i.reply({ content: 'Only the command user can change these settings.', flags: [InteractionResponseFlags.Ephemeral] });
+          await i.reply({ content: 'Only the command user can change these settings.', ephemeral: true });
           return;
         }
 

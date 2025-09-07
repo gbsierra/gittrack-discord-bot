@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, InteractionResponseFlags } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,7 +10,7 @@ module.exports = {
         .setRequired(true)
         .setAutocomplete(true)), // Enabled autocomplete for URL
   async execute(interaction, prisma) {
-    await interaction.deferReply({ flags: [InteractionResponseFlags.Ephemeral] });
+    await interaction.deferReply({ ephemeral: true });
 
     const repoUrl = interaction.options.getString('url');
     const guildId = interaction.guildId;
