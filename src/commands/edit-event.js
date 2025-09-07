@@ -10,6 +10,8 @@ const ROUTABLE_EVENTS = [
   { name: 'create', value: 'create' },
   { name: 'delete', value: 'delete' },
   { name: 'milestone', value: 'milestone' },
+  { name: 'deployment', value: 'deployment' },
+  { name: 'deployment_status', value: 'deployment_status' },
   { name: 'ping', value: 'ping' },
 ];
 
@@ -23,6 +25,8 @@ const EVENT_ACTION_PRESETS = {
   create: ['created'],
   delete: ['deleted'],
   milestone: ['created', 'closed', 'opened'],
+  deployment: ['created'],
+  deployment_status: ['created'],
   ping: ['ping']
 };
 

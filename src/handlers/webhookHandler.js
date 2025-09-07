@@ -246,6 +246,10 @@ function initializeWebServer(prisma, botClient) {
           return await handleEventWithLogging(handleWorkflowJobEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext);
         case 'check_run':
           return await handleEventWithLogging(handleCheckRunEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext);
+        case 'deployment':
+          return await handleEventWithLogging(handleDeploymentEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext);
+        case 'deployment_status':
+          return await handleEventWithLogging(handleDeploymentStatusEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext);
         case 'ping':
           return await handleEventWithLogging(handlePingEvent, req, res, payload, prisma, botClient, validatedRepositoryContext, loggingContext);
         default:
@@ -1085,6 +1089,194 @@ function initializeWebServer(prisma, botClient) {
       console.error(`Error sending ping confirmation to channel ${channelId}:`, err);
     }
     return { statusCode: 200, message: 'Ping event processed for authenticated server.', channelId: channelId, messageId: null };
+  }
+
+  async function handleDeploymentEvent(req, res, payload, prisma, botClient, repoContext) {
+    const repoUrl = payload.repository.html_url;
+    const deployment = payload.deployment;
+    const serverConfig = repoContext.server;
+    
+    // Prefer event-specific channel for deployments
+    const { channelId, config } = await getEventRouting(prisma, repoContext.id, 'deployment', repoContext.notificationChannelId);
+
+    if (!config || !config.actionsEnabled || !config.actionsEnabled[payload.action]) {
+      return { statusCode: 200, message: `Deployment action '${payload.action}' disabled by config.`, channelId: null, messageId: null };
+    }
+
+    if (channelId === 'pending') return { statusCode: 200, message: 'Deployment event ack, channel pending.', channelId: null, messageId: null };
+
+    try {
+      // Check channel limits before sending notification
+      const canSendNotification = await checkChannelLimitAndWarn(prisma, botClient, repoContext, channelId);
+      
+      if (!canSendNotification) {
+        console.warn(`Skipping deployment notification delivery to channel ${channelId} due to channel limit`);
+        return { statusCode: 200, message: 'Deployment event acknowledged, but notification skipped due to channel limits.', channelId: null, messageId: null };
+      }
+      
+      const channel = await botClient.channels.fetch(channelId);
+      if (channel && channel.isTextBased()) {
+        const embed = {
+          color: 0x6F42C1,
+          author: { 
+            name: deployment.creator.login, 
+            icon_url: deployment.creator.avatar_url, 
+            url: deployment.creator.html_url 
+          },
+          title: '🚀 New Deployment Created',
+          description: `Deployment to \`${deployment.environment}\` environment`,
+          url: deployment.url,
+          fields: [
+            { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: true },
+            { name: 'Environment', value: `\`${deployment.environment}\``, inline: true },
+            { name: 'Ref', value: `\`${deployment.ref}\``, inline: true },
+            { name: 'Task', value: deployment.task || 'deploy', inline: true },
+            { name: 'Created by', value: deployment.creator.login, inline: true },
+          ],
+          timestamp: deployment.created_at || new Date().toISOString(),
+          footer: { text: 'GitHub Deployment' }
+        };
+
+        if (deployment.description) {
+          let description = deployment.description;
+          if (description.length > 300) {
+            description = description.substring(0, 297) + '...';
+          }
+          embed.fields.push({ name: 'Description', value: description, inline: false });
+        }
+
+        const sentMessage = await channel.send({ embeds: [embed] });
+        console.log(`Sent deployment notification to channel ${channelId} in guild ${serverConfig.guildId}`);
+
+        // Increment messagesSent counter
+        try {
+          await prisma.server.update({
+            where: { id: serverConfig.id },
+            data: { messagesSent: { increment: 1 } },
+          });
+          console.log(`Incremented messagesSent for server ${serverConfig.id} after deployment event`);
+        } catch (dbError) {
+          console.error(`Failed to increment messagesSent for server ${serverConfig.id} after deployment event:`, dbError);
+        }
+        
+        return { statusCode: 200, message: 'Deployment event processed for authenticated server.', channelId: channelId, messageId: sentMessage.id };
+      }
+    } catch (err) { 
+      console.error(`Error sending deployment message to channel ${channelId}:`, err); 
+    }
+    return { statusCode: 200, message: 'Deployment event processed for authenticated server.', channelId: channelId, messageId: null };
+  }
+
+  async function handleDeploymentStatusEvent(req, res, payload, prisma, botClient, repoContext) {
+    const repoUrl = payload.repository.html_url;
+    const deployment = payload.deployment;
+    const deploymentStatus = payload.deployment_status;
+    const serverConfig = repoContext.server;
+    
+    // Prefer event-specific channel for deployment status
+    const { channelId, config } = await getEventRouting(prisma, repoContext.id, 'deployment_status', repoContext.notificationChannelId);
+
+    if (!config || !config.actionsEnabled || !config.actionsEnabled[payload.action]) {
+      return { statusCode: 200, message: `Deployment status action '${payload.action}' disabled by config.`, channelId: null, messageId: null };
+    }
+
+    if (channelId === 'pending') return { statusCode: 200, message: 'Deployment status event ack, channel pending.', channelId: null, messageId: null };
+
+    try {
+      // Check channel limits before sending notification
+      const canSendNotification = await checkChannelLimitAndWarn(prisma, botClient, repoContext, channelId);
+      
+      if (!canSendNotification) {
+        console.warn(`Skipping deployment status notification delivery to channel ${channelId} due to channel limit`);
+        return { statusCode: 200, message: 'Deployment status event acknowledged, but notification skipped due to channel limits.', channelId: null, messageId: null };
+      }
+      
+      const channel = await botClient.channels.fetch(channelId);
+      if (channel && channel.isTextBased()) {
+        let emoji = '⏳';
+        let color = 0x6B7280;
+        let statusText = deploymentStatus.state;
+
+        switch (deploymentStatus.state) {
+          case 'success':
+            emoji = '✅';
+            color = 0x1A7F37;
+            statusText = 'Success';
+            break;
+          case 'failure':
+            emoji = '❌';
+            color = 0xCF222E;
+            statusText = 'Failed';
+            break;
+          case 'error':
+            emoji = '💥';
+            color = 0xCF222E;
+            statusText = 'Error';
+            break;
+          case 'pending':
+            emoji = '⏳';
+            color = 0xFF9800;
+            statusText = 'Pending';
+            break;
+          case 'in_progress':
+            emoji = '🔄';
+            color = 0x0969DA;
+            statusText = 'In Progress';
+            break;
+        }
+
+        const embed = {
+          color: color,
+          author: { 
+            name: deploymentStatus.creator?.login || 'System', 
+            icon_url: deploymentStatus.creator?.avatar_url, 
+            url: deploymentStatus.creator?.html_url 
+          },
+          title: `${emoji} Deployment ${statusText}`,
+          description: `Deployment to \`${deployment.environment}\` environment`,
+          url: deploymentStatus.target_url || deployment.url,
+          fields: [
+            { name: 'Repository', value: `[${payload.repository.full_name}](${repoUrl})`, inline: true },
+            { name: 'Environment', value: `\`${deployment.environment}\``, inline: true },
+            { name: 'Status', value: statusText, inline: true },
+            { name: 'Ref', value: `\`${deployment.ref}\``, inline: true },
+          ],
+          timestamp: deploymentStatus.updated_at || new Date().toISOString(),
+          footer: { text: 'GitHub Deployment Status' }
+        };
+
+        if (deploymentStatus.description) {
+          let description = deploymentStatus.description;
+          if (description.length > 300) {
+            description = description.substring(0, 297) + '...';
+          }
+          embed.fields.push({ name: 'Description', value: description, inline: false });
+        }
+
+        if (deploymentStatus.target_url) {
+          embed.fields.push({ name: 'Deployment URL', value: `[View Deployment](${deploymentStatus.target_url})`, inline: false });
+        }
+
+        const sentMessage = await channel.send({ embeds: [embed] });
+        console.log(`Sent deployment status notification to channel ${channelId} in guild ${serverConfig.guildId}`);
+
+        // Increment messagesSent counter
+        try {
+          await prisma.server.update({
+            where: { id: serverConfig.id },
+            data: { messagesSent: { increment: 1 } },
+          });
+          console.log(`Incremented messagesSent for server ${serverConfig.id} after deployment status event`);
+        } catch (dbError) {
+          console.error(`Failed to increment messagesSent for server ${serverConfig.id} after deployment status event:`, dbError);
+        }
+        
+        return { statusCode: 200, message: 'Deployment status event processed for authenticated server.', channelId: channelId, messageId: sentMessage.id };
+      }
+    } catch (err) { 
+      console.error(`Error sending deployment status message to channel ${channelId}:`, err); 
+    }
+    return { statusCode: 200, message: 'Deployment status event processed for authenticated server.', channelId: channelId, messageId: null };
   }
 
   return app;
