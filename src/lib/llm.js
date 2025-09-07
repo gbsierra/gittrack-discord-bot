@@ -62,7 +62,7 @@ class LLMService {
     const commitCount = commits.length;
     const repoName = repository.name;
 
-    const prompt = `Analyze these GitHub commits and create a user-friendly announcement for Discord users.
+    const prompt = `Analyze these GitHub commits and create a clear, concise update message for end users.
 
 Repository: ${repoName}
 Number of commits: ${commitCount}
@@ -71,22 +71,37 @@ Commit messages:
 ${commitMessages}
 
 Requirements:
-- Focus on user benefits, not technical details
-- Use friendly, non-technical language
-- Explain what users will experience differently
-- Keep it concise and clear (max 500 characters)
-- Hide any sensitive information (usernames, file paths, etc.)
-- Use emojis to make it engaging
-- Format as a Discord message
+- Be direct and factual about what changed for users
+- Explain what the change means for users (bug fix, new feature, improvement, etc.)
+- Keep it concise (max 300 characters)
+- Use simple, clear language that non-technical users understand
+- Include relevant emoji (1-2 max)
+- NO file names, technical details, or developer jargon
+- NO fluff, opinions, or marketing language
+- NO "try it out" or "let us know" phrases
+- Focus on user-facing changes and impact
 
-Generate a Discord message that regular users will understand and appreciate.`;
+Examples of good messages:
+- "🐛 Fixed login issue - users can now sign in without errors"
+- "✨ Added dark mode toggle in settings"
+- "⚡ Improved page loading speed by 40%"
+- "🔧 Updated user dashboard layout"
+- "📱 Fixed mobile app crashes"
+
+Examples of BAD messages (avoid these):
+- "Updated login.js and auth.ts files"
+- "Refactored component structure"
+- "Fixed database connection issues"
+- "Updated dependencies and packages"
+
+Generate a direct, user-focused update message.`;
 
     const response = await this.openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
         {
           role: 'system',
-          content: 'You are a helpful assistant that converts technical commit messages into user-friendly Discord announcements. Focus on user benefits and use engaging, non-technical language.'
+          content: 'You are a technical writer that converts commit messages into clear, factual update announcements. Be direct, concise, and focus on what actually changed and its impact on users.'
         },
         {
           role: 'user',
@@ -123,7 +138,7 @@ Generate a Discord message that regular users will understand and appreciate.`;
       totalLength: commitMessages.length
     });
 
-    const prompt = `Analyze these GitHub commits and create a user-friendly announcement for Discord users.
+    const prompt = `Analyze these GitHub commits and create a clear, concise update message for end users.
 
 Repository: ${repoName}
 Number of commits: ${commitCount}
@@ -132,15 +147,30 @@ Commit messages:
 ${commitMessages}
 
 Requirements:
-- Focus on user benefits, not technical details
-- Use friendly, non-technical language
-- Explain what users will experience differently
-- Keep it concise and clear (max 500 characters)
-- Hide any sensitive information (usernames, file paths, etc.)
-- Use emojis to make it engaging
-- Format as a Discord message
+- Be direct and factual about what changed for users
+- Explain what the change means for users (bug fix, new feature, improvement, etc.)
+- Keep it concise (max 300 characters)
+- Use simple, clear language that non-technical users understand
+- Include relevant emoji (1-2 max)
+- NO file names, technical details, or developer jargon
+- NO fluff, opinions, or marketing language
+- NO "try it out" or "let us know" phrases
+- Focus on user-facing changes and impact
 
-Generate a Discord message that regular users will understand and appreciate.`;
+Examples of good messages:
+- "🐛 Fixed login issue - users can now sign in without errors"
+- "✨ Added dark mode toggle in settings"
+- "⚡ Improved page loading speed by 40%"
+- "🔧 Updated user dashboard layout"
+- "📱 Fixed mobile app crashes"
+
+Examples of BAD messages (avoid these):
+- "Updated login.js and auth.ts files"
+- "Refactored component structure"
+- "Fixed database connection issues"
+- "Updated dependencies and packages"
+
+Generate a direct, user-focused update message.`;
 
     console.log('🔍 [LLM] Making OpenRouter API request...');
     
@@ -157,7 +187,7 @@ Generate a Discord message that regular users will understand and appreciate.`;
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful assistant that converts technical commit messages into user-friendly Discord announcements. Focus on user benefits and use engaging, non-technical language.'
+            content: 'You are a technical writer that converts commit messages into clear, factual update announcements. Be direct, concise, and focus on what actually changed and its impact on users.'
           },
           {
             role: 'user',
@@ -195,12 +225,14 @@ Generate a Discord message that regular users will understand and appreciate.`;
    */
   generateFallbackMessage(commits, repository) {
     const commitCount = commits.length;
-    const repoName = repository.name;
     
     if (commitCount === 1) {
-      return `🚀 **${repoName} Update**\n\nWe've made an improvement to enhance your experience! The latest changes will make things better for you. 🎉`;
+      // Use just the commit title (first line)
+      return commits[0].message.split('\n')[0];
     } else {
-      return `🚀 **${repoName} Update**\n\nWe've made ${commitCount} improvements to enhance your experience! These changes will make things better for you. 🎉`;
+      // Use the first commit title and indicate there are more
+      const firstCommitTitle = commits[0].message.split('\n')[0];
+      return `${firstCommitTitle} (+${commitCount - 1} more)`;
     }
   }
 
@@ -209,14 +241,23 @@ Generate a Discord message that regular users will understand and appreciate.`;
    * @param {string} message - LLM generated message
    * @param {Object} repository - Repository information
    * @param {string} compareUrl - GitHub compare URL
+   * @param {boolean} hideGitHubLinks - Whether to hide GitHub links
    * @returns {Object} Discord embed object
    */
-  createDiscordEmbed(message, repository, compareUrl) {
-    return {
+  createDiscordEmbed(message, repository, compareUrl, hideGitHubLinks = false) {
+    const embed = {
       color: 0x28a745, // GitHub green
-      title: '🤖 AI-Enhanced Update',
       description: message,
-      fields: [
+      timestamp: new Date().toISOString(),
+      footer: {
+        text: 'GitTrack Enhanced • AI-Powered Updates',
+        icon_url: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png'
+      }
+    };
+
+    // Only add GitHub links if not hidden
+    if (!hideGitHubLinks) {
+      embed.fields = [
         {
           name: 'Repository',
           value: `[${repository.full_name}](${repository.html_url})`,
@@ -227,13 +268,10 @@ Generate a Discord message that regular users will understand and appreciate.`;
           value: `[Compare](${compareUrl})`,
           inline: true
         }
-      ],
-      timestamp: new Date().toISOString(),
-      footer: {
-        text: 'GitTrack Enhanced • AI-Powered Updates',
-        icon_url: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png'
-      }
-    };
+      ];
+    }
+
+    return embed;
   }
 }
 

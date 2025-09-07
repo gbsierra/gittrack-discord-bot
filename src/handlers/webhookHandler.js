@@ -597,7 +597,9 @@ function initializeWebServer(prisma, botClient) {
                         console.log('✅ [PUSH] LLM enhancement successful');
                         
                         // Create enhanced embed
-                        embed = llmService.createDiscordEmbed(userFriendlyMessage, payload.repository, payload.compare);
+                        // TODO: Make this configurable - for now defaulting to hide GitHub links
+                        const hideGitHubLinks = true; // Set to true to remove GitHub links
+                        embed = llmService.createDiscordEmbed(userFriendlyMessage, payload.repository, payload.compare, hideGitHubLinks);
                     } catch (error) {
                         console.error('❌ [PUSH] LLM enhancement failed, falling back to standard message:', error);
                         embed = createStandardPushEmbed(payload, branchName, repoUrl);
