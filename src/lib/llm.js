@@ -108,6 +108,34 @@ class LLMService {
 
     const prompt = promptService.generatePushPrompt(commits, repository, diff);
 
+    // Log the complete prompt being sent to the LLM
+    console.log('🔍 [LLM] Complete prompt being sent to LLM:');
+    console.log('='.repeat(80));
+    console.log(prompt);
+    console.log('='.repeat(80));
+
+    // Prepare the complete request payload
+    const requestPayload = {
+      model: 'anthropic/claude-3.5-sonnet',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a technical writer that converts commit messages into clear, factual update announcements. Be direct, concise, and focus on what actually changed and its impact on users.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 2000,
+      temperature: 0.7,
+    };
+
+    // Log the system message and complete request structure
+    console.log('🔍 [LLM] System message:', requestPayload.messages[0].content);
+    console.log('🔍 [LLM] Complete request payload:');
+    console.log(JSON.stringify(requestPayload, null, 2));
+
     console.log('🔍 [LLM] Making OpenRouter API request...');
     
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -118,21 +146,7 @@ class LLMService {
         'HTTP-Referer': 'https://gittrack-enhanced.com',
         'X-Title': 'GitTrack Enhanced'
       },
-      body: JSON.stringify({
-        model: 'anthropic/claude-3.5-sonnet',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a technical writer that converts commit messages into clear, factual update announcements. Be direct, concise, and focus on what actually changed and its impact on users.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        max_tokens: 2000,
-        temperature: 0.7,
-      })
+      body: JSON.stringify(requestPayload)
     });
 
     console.log('🔍 [LLM] OpenRouter API response status:', response.status);
@@ -148,6 +162,13 @@ class LLMService {
     }
 
     const data = await response.json();
+    
+    // Log the raw response from the LLM
+    console.log('🔍 [LLM] Raw LLM response:');
+    console.log('='.repeat(80));
+    console.log(data.choices[0].message.content);
+    console.log('='.repeat(80));
+    
     console.log('✅ [LLM] OpenRouter API success, response length:', data.choices[0].message.content.length);
     
     return data.choices[0].message.content.trim();
