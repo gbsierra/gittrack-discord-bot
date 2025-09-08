@@ -24,45 +24,51 @@ Repository: ${repoName}
 Git Diff:
 ${filteredDiff}
 
+CRITICAL REQUIREMENTS:
+1. Each bullet point MUST be directly derived from specific changes visible in the diff above
+2. You must be able to point to exact lines of code that support each bullet point
+3. If you cannot find evidence in the diff for a change, DO NOT include it
+4. ONLY include changes that directly affect the user experience - what users will see, feel, or interact with differently
+
+Analysis Process:
+1. First, identify all user-facing changes by examining the diff
+2. For each change, determine what users will actually experience differently
+3. Only create bullet points for changes that have a direct impact on user experience
+4. If the diff shows only internal/technical changes with no user impact, create no bullet points
+
 Requirements for bullet points:
-- Identify specific fixes/features for specific platforms or areas
-- Explain improvements in user terms (what users will notice)
+- Each bullet point must correspond to specific additions/deletions in the diff
+- Explain what users will notice or experience differently
 - Use simple, clear language that non-technical users understand
-- Focus on user-facing changes and impact
-- Avoid technical details while conveying the impact
-- Each bullet point should be concise but meaningful
+- Be specific about the user impact (what they can see, do, or experience)
 - NO file names, technical details, or developer jargon
 - NO fluff, opinions, or marketing language
 - NO emojis or visual elements
+- NO generic statements that could apply to any commit
 
-Examples of good bullet points:
-- "Fixed lesson buttons on mobile devices and improved error handling when content is unavailable"
-- "Fixed login issue - users can now sign in without errors"
-- "Added dark mode toggle in settings"
-- "Improved page loading speed by 40%"
-- "Updated user dashboard layout for better navigation"
-- "Enhanced security for user data protection"
-- "Added progress tracking for completed lessons"
+Examples of EVIDENCE-BASED bullet points:
+- "Fixed login form validation - users will no longer see 'invalid email' errors for valid addresses" (evidence: validation logic changes in diff)
+- "Added dark mode toggle in user settings menu" (evidence: new UI component in diff)
+- "Improved mobile navigation - menu now slides in from the left" (evidence: CSS/JS changes for mobile menu)
+- "Fixed image loading issue on slow connections" (evidence: timeout/retry logic changes)
 
 Examples of BAD bullet points (avoid these):
-- "Updated login.js and auth.ts files"
-- "Refactored component structure"
-- "Fixed database connection issues"
-- "Updated dependencies and packages"
-- "Improved code quality"
-- "Fixed bugs"
+- "Improved user experience" (too vague, no specific evidence)
+- "Fixed bugs" (generic, no specific evidence)
+- "Updated dependencies" (technical, not user-facing)
+- "Enhanced security" (vague, unless specific security code is visible)
+- "Improved performance" (unless specific performance code is visible)
 
 Output format (JSON only):
 {
   "summary": "Brief overall summary without emojis",
   "changes": [
-    "First specific user-facing change",
-    "Second specific user-facing change",
-    "Third specific user-facing change"
+    "First specific user-facing change with clear evidence in diff",
+    "Second specific user-facing change with clear evidence in diff"
   ]
 }
 
-Generate a JSON response with a summary and 2-4 meaningful bullet points.`;
+Generate a JSON response with a summary and evidence-based bullet points. Include as many or as few bullet points as needed - only include changes that directly affect the user experience. If there are no user-facing changes, the changes array can be empty.`;
   }
 
   /**

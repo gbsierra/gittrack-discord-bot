@@ -116,7 +116,7 @@ class LLMService {
 
     // Prepare the complete request payload
     const requestPayload = {
-      model: 'anthropic/claude-3.5-sonnet',
+      model: 'deepseek/deepseek-chat-v3.1:free',
       messages: [
         {
           role: 'system',
