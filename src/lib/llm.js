@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const promptService = require('./prompts');
 
 /**
@@ -7,6 +8,7 @@ const promptService = require('./prompts');
 class LLMService {
   constructor() {
     this.openai = null;
+    this.gemini = null;
   }
 
   /**
@@ -20,9 +22,17 @@ class LLMService {
   }
 
   /**
+   * Initialize Gemini client with API key
+   * @param {string} apiKey - Gemini API key
+   */
+  initializeGemini(apiKey) {
+    this.gemini = new GoogleGenerativeAI(apiKey);
+  }
+
+  /**
    * Generate user-friendly message from commit data
    * @param {Array} commits - Array of commit objects
-   * @param {string} provider - 'openai' or 'openrouter'
+   * @param {string} provider - 'openai', 'openrouter', or 'gemini'
    * @param {string} apiKey - API key for the provider
    * @param {Object} repository - Repository information
    * @param {string} diff - Git diff of the commit
@@ -42,6 +52,8 @@ class LLMService {
         rawResponse = await this.generateWithOpenAI(commits, apiKey, repository, diff);
       } else if (provider === 'openrouter') {
         rawResponse = await this.generateWithOpenRouter(commits, apiKey, repository, diff);
+      } else if (provider === 'gemini') {
+        rawResponse = await this.generateWithGemini(commits, apiKey, repository, diff);
       } else {
         throw new Error(`Unsupported provider: ${provider}`);
       }
@@ -172,6 +184,51 @@ class LLMService {
     console.log('✅ [LLM] OpenRouter API success, response length:', data.choices[0].message.content.length);
     
     return data.choices[0].message.content.trim();
+  }
+
+  /**
+   * Generate message using Google Gemini
+   * @param {Array} commits - Array of commit objects
+   * @param {string} apiKey - Gemini API key
+   * @param {Object} repository - Repository information
+   * @param {string} diff - Git diff of the commit
+   * @returns {Promise<string>} User-friendly message
+   */
+  async generateWithGemini(commits, apiKey, repository, diff) {
+    console.log('🔍 [LLM] Starting Gemini generation:', {
+      commitCount: commits.length,
+      repoName: repository.name,
+      hasApiKey: !!apiKey
+    });
+    
+    this.initializeGemini(apiKey);
+    
+    const prompt = promptService.generatePushPrompt(commits, repository, diff);
+    
+    console.log('🔍 [LLM] Complete prompt being sent to Gemini:');
+    console.log('='.repeat(80));
+    console.log(prompt);
+    console.log('='.repeat(80));
+
+    try {
+      const model = this.gemini.getGenerativeModel({ model: 'gemini-2.5-pro' });
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('🔍 [LLM] Raw Gemini response:');
+      console.log('='.repeat(80));
+      console.log(text);
+      console.log('='.repeat(80));
+      
+      console.log('✅ [LLM] Gemini API success, response length:', text.length);
+      
+      return text.trim();
+    } catch (error) {
+      console.error('❌ [LLM] Gemini API error:', error);
+      throw new Error(`Gemini API error: ${error.message}`);
+    }
   }
 
   /**

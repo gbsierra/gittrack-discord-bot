@@ -212,7 +212,7 @@ module.exports = {
           },
           {
             name: '🤖 **LLM Enhancement (Optional)**',
-            value: `**To enable AI-generated user-friendly messages:**\n\nAdd your API key to the webhook URL:\n\`${webhookBaseUrl}?openai_key=YOUR_API_KEY\`\n\n**Supported providers:**\n• OpenAI: \`&openai_key=sk-xxx\`\n• OpenRouter: \`&openrouter_key=xxx\`\n\n*Without API key: Standard technical messages*`,
+            value: `**To enable AI-generated user-friendly messages:**\n\nAdd your API key to the webhook URL:\n\`${webhookBaseUrl}?openai_key=YOUR_API_KEY\`\n\n**Supported providers:**\n• OpenAI: \`&openai_key=sk-xxx\`\n• OpenRouter: \`&openrouter_key=xxx\`\n• Gemini: \`&gemini_key=xxx\`\n\n*Without API key: Standard technical messages*`,
             inline: false
           }
         )

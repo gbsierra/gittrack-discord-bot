@@ -108,11 +108,13 @@ Enable AI-generated summaries by adding your API key to the webhook URL:
 ```
 https://your-app-name.up.railway.app/github-webhook?openai_key=sk-xxx
 https://your-app-name.up.railway.app/github-webhook?openrouter_key=sk-or-v1-xxx
+https://your-app-name.up.railway.app/github-webhook?gemini_key=xxx
 ```
 
 **Supported providers:**
 - **OpenAI**: Add `?openai_key=sk-xxx` to webhook URL
 - **OpenRouter**: Add `?openrouter_key=sk-or-v1-xxx` to webhook URL
+- **Gemini**: Add `?gemini_key=xxx` to webhook URL
 
 ### Environment Variables
 

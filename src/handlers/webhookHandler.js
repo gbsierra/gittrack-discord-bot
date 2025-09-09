@@ -100,10 +100,10 @@ function initializeWebServer(prisma, botClient) {
     console.log('🔍 [WEBHOOK] Payload keys:', payload ? Object.keys(payload) : 'undefined');
     
     // Extract API keys from query parameters for LLM enhancement
-    const { openai_key, openrouter_key } = req.query;
+    const { openai_key, openrouter_key, gemini_key } = req.query;
     const llmConfig = {
-      provider: openai_key ? 'openai' : (openrouter_key ? 'openrouter' : null),
-      apiKey: openai_key || openrouter_key || null
+      provider: openai_key ? 'openai' : (openrouter_key ? 'openrouter' : (gemini_key ? 'gemini' : null)),
+      apiKey: openai_key || openrouter_key || gemini_key || null
     };
     console.log('🔍 [WEBHOOK] LLM Config:', { provider: llmConfig.provider, hasApiKey: !!llmConfig.apiKey });
     
