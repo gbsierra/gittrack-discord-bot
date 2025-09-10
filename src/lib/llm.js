@@ -122,9 +122,27 @@ class LLMService {
 
     // Log the complete prompt being sent to the LLM
     console.log('🔍 [LLM] Complete prompt being sent to LLM:');
-    console.log('='.repeat(80));
-    console.log(prompt);
-    console.log('='.repeat(80));
+    console.log('🔍 [LLM] Prompt length:', prompt.length, 'characters');
+    
+    // Log prompt in chunks to avoid Railway rate limits
+    const logPromptInChunks = async (text, chunkSize = 50) => {
+      const lines = text.split('\n');
+      console.log('='.repeat(80));
+      
+      for (let i = 0; i < lines.length; i += chunkSize) {
+        const chunk = lines.slice(i, i + chunkSize).join('\n');
+        console.log(chunk);
+        
+        // Small delay every chunk to stay under rate limit
+        if (i + chunkSize < lines.length) {
+          await new Promise(resolve => setTimeout(resolve, 10)); // 10ms delay
+        }
+      }
+      
+      console.log('='.repeat(80));
+    };
+    
+    logPromptInChunks(prompt); // Non-blocking - let it run in background
 
     // Prepare the complete request payload
     const requestPayload = {
@@ -177,9 +195,27 @@ class LLMService {
     
     // Log the raw response from the LLM
     console.log('🔍 [LLM] Raw LLM response:');
-    console.log('='.repeat(80));
-    console.log(data.choices[0].message.content);
-    console.log('='.repeat(80));
+    console.log('🔍 [LLM] Response length:', data.choices[0].message.content.length, 'characters');
+    
+    // Log response in chunks to avoid Railway rate limits
+    const logResponseInChunks = async (text, chunkSize = 50) => {
+      const lines = text.split('\n');
+      console.log('='.repeat(80));
+      
+      for (let i = 0; i < lines.length; i += chunkSize) {
+        const chunk = lines.slice(i, i + chunkSize).join('\n');
+        console.log(chunk);
+        
+        // Small delay every chunk to stay under rate limit
+        if (i + chunkSize < lines.length) {
+          await new Promise(resolve => setTimeout(resolve, 10)); // 10ms delay
+        }
+      }
+      
+      console.log('='.repeat(80));
+    };
+    
+    logResponseInChunks(data.choices[0].message.content); // Non-blocking - let it run in background
     
     console.log('✅ [LLM] OpenRouter API success, response length:', data.choices[0].message.content.length);
     
@@ -206,9 +242,27 @@ class LLMService {
     const prompt = promptService.generatePushPrompt(commits, repository, diff);
     
     console.log('🔍 [LLM] Complete prompt being sent to Gemini:');
-    console.log('='.repeat(80));
-    console.log(prompt);
-    console.log('='.repeat(80));
+    console.log('🔍 [LLM] Prompt length:', prompt.length, 'characters');
+    
+    // Log prompt in chunks to avoid Railway rate limits
+    const logPromptInChunks = async (text, chunkSize = 50) => {
+      const lines = text.split('\n');
+      console.log('='.repeat(80));
+      
+      for (let i = 0; i < lines.length; i += chunkSize) {
+        const chunk = lines.slice(i, i + chunkSize).join('\n');
+        console.log(chunk);
+        
+        // Small delay every chunk to stay under rate limit
+        if (i + chunkSize < lines.length) {
+          await new Promise(resolve => setTimeout(resolve, 10)); // 10ms delay
+        }
+      }
+      
+      console.log('='.repeat(80));
+    };
+    
+    logPromptInChunks(prompt); // Non-blocking - let it run in background
 
     try {
       const model = this.gemini.getGenerativeModel({ model: 'gemini-2.5-pro' });
@@ -218,9 +272,27 @@ class LLMService {
       const text = response.text();
       
       console.log('🔍 [LLM] Raw Gemini response:');
-      console.log('='.repeat(80));
-      console.log(text);
-      console.log('='.repeat(80));
+      console.log('🔍 [LLM] Response length:', text.length, 'characters');
+      
+      // Log response in chunks to avoid Railway rate limits
+      const logResponseInChunks = async (text, chunkSize = 50) => {
+        const lines = text.split('\n');
+        console.log('='.repeat(80));
+        
+        for (let i = 0; i < lines.length; i += chunkSize) {
+          const chunk = lines.slice(i, i + chunkSize).join('\n');
+          console.log(chunk);
+          
+          // Small delay every chunk to stay under rate limit
+          if (i + chunkSize < lines.length) {
+            await new Promise(resolve => setTimeout(resolve, 10)); // 10ms delay
+          }
+        }
+        
+        console.log('='.repeat(80));
+      };
+      
+      logResponseInChunks(text); // Non-blocking - let it run in background
       
       console.log('✅ [LLM] Gemini API success, response length:', text.length);
       
